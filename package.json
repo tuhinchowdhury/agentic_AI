@@ -1,0 +1,15 @@
+{
+  "name": "node-graphql-schema-ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@apollo/server": "4.10.4",
+    "express": "4.19.2",
+    "graphql": "16.9.0"
+  }
+}

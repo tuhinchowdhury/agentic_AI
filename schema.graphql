@@ -1,0 +1,14 @@
+type Query {
+  items: [String!]!
+}
+
+type Mutation {
+  insert(value: String!): [String!]!
+  delete(index: Int!): [String!]!
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}
+

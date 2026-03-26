@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GraphQL Schema UI</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 16px; }
+      textarea { width: 100%; height: 70vh; min-height: 280px; }
+      pre { background: #0b1020; color: #e6edf3; padding: 12px; overflow: auto; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+      input, select, button { padding: 8px 10px; font-size: 14px; }
+      button { cursor: pointer; }
+      .status { color: #444; }
+      .error { color: #b91c1c; white-space: pre-wrap; }
+      .list { margin-top: 12px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+      .panel { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+      .panel h2 { margin: 0 0 10px; font-size: 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e5e7eb; }
+      th { font-weight: 700; background: #f8fafc; }
+      tr.hl-ok td { background: #dcfce7; }
+      tr.hl-bad td { background: #fee2e2; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } textarea { height: 40vh; } }
+    </style>
+  </head>
+  <body>
+    <div class="grid">
+      <div class="panel">
+        <h2>schema.txt</h2>
+        <!-- UI: reads schema.txt and displays it in the browser -->
+        <textarea id="schemaBox" readonly></textarea>
+      </div>
+
+      <div class="panel">
+        <h2>Frontend</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>UserID</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-field="firstname"><td>firstname</td><td>User First Name</td></tr>
+            <tr data-field="lastname"><td>lastname</td><td>User Last Name</td></tr>
+            <tr data-field="email"><td>email</td><td>User Email ID</td></tr>
+            <tr data-field="phone"><td>phone</td><td>User Phone number</td></tr>
+            <tr data-field="time"><td>time</td><td>User local time</td></tr>
+          </tbody>
+        </table>
+        <div id="decisionPanel" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+          <div class="status">
+            Decision: <strong id="decisionBox">—</strong>
+          </div>
+          <div class="error" id="decisionError"></div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Mutation</h2>
+    <div class="row">
+      <label>
+        Operation
+        <select id="op">
+          <option value="insert">insert</option>
+          <option value="delete">delete</option>
+        </select>
+      </label>
+      <label>
+        Input
+        <input id="inputValue" placeholder="insert: value, delete: field name to analyze" />
+      </label>
+      <button id="runBtn">Run</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="error" id="error"></div>
+
+    <div class="list">
+      <h3>items</h3>
+      <pre id="itemsBox">[]</pre>
+    </div>
+
+    <script>
+      const schemaBox = document.getElementById("schemaBox");
+      const opEl = document.getElementById("op");
+      const inputValueEl = document.getElementById("inputValue");
+      const runBtn = document.getElementById("runBtn");
+      const statusEl = document.getElementById("status");
+      const errorEl = document.getElementById("error");
+      const itemsBox = document.getElementById("itemsBox");
+      const frontendRows = Array.from(document.querySelectorAll("tr[data-field]"));
+      const decisionBox = document.getElementById("decisionBox");
+      const decisionError = document.getElementById("decisionError");
+
+      async function fetchJSON(url, payload) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return res.json();
+      }
+
+      async function loadSchema() {
+        const res = await fetch("/schema.txt");
+        const text = await res.text();
+        schemaBox.value = text;
+      }
+
+      async function loadItems() {
+        errorEl.textContent = "";
+        statusEl.textContent = "Loading items...";
+        const result = await fetchJSON("/graphql", { query: "query { items }" });
+        if (result.errors && result.errors.length) {
+          errorEl.textContent = result.errors.map((e) => e.message).join("\\n");
+          statusEl.textContent = "";
+          return;
+        }
+        itemsBox.textContent = JSON.stringify(result.data.items, null, 2);
+        statusEl.textContent = "";
+      }
+
+      function clearFrontendHighlights() {
+        for (const tr of frontendRows) {
+          tr.classList.remove("hl-ok", "hl-bad");
+        }
+      }
+
+      function highlightFrontendRow(field, isOk) {
+        const key = String(field || "").trim().toLowerCase();
+        const tr = frontendRows.find((r) => (r.dataset.field || "").toLowerCase() === key);
+        if (!tr) return;
+        tr.classList.add(isOk ? "hl-ok" : "hl-bad");
+      }
+
+      async function runMutation() {
+        errorEl.textContent = "";
+        statusEl.textContent = "Running mutation...";
+
+        const op = opEl.value;
+        const rawInput = (inputValueEl.value || "").trim();
+
+        try {
+          clearFrontendHighlights();
+          if (decisionBox) decisionBox.textContent = "—";
+          if (decisionError) decisionError.textContent = "";
+          if (op === "insert") {
+            if (!rawInput) throw new Error("insert requires a non-empty value");
+            const query =
+              "mutation($value: String!){ insert(value: $value) }";
+            const result = await fetchJSON("/graphql", {
+              query,
+              variables: { value: rawInput },
+            });
+
+            if (result.errors && result.errors.length) {
+              throw new Error(result.errors.map((e) => e.message).join("\\n"));
+            }
+            itemsBox.textContent = JSON.stringify(result.data.insert, null, 2);
+          } else if (op === "delete") {
+            if (!rawInput) throw new Error("delete requires a field name to analyze");
+            statusEl.textContent = "Checking delete dependency...";
+            const res = await fetch(`/api/delete-check?field=${encodeURIComponent(rawInput)}`);
+            const data = await res.json();
+            itemsBox.textContent = JSON.stringify(data, null, 2);
+
+            // If field isn't found (or API returned an error), treat as DEPENDENT for UI purposes.
+            if (!res.ok || data?.summary?.found === false) {
+              if (decisionBox) decisionBox.textContent = "";
+              if (decisionError) decisionError.textContent = data?.error || "Field not found in schema";
+              highlightFrontendRow(rawInput, false);
+              statusEl.textContent = "";
+              return;
+            }
+
+            const dependentCount = Number(data?.summary?.dependentCount ?? NaN);
+            const isOk = Number.isFinite(dependentCount) && dependentCount === 0;
+            highlightFrontendRow(rawInput, isOk);
+
+            const decision = data?.results?.[0]?.decision;
+            if (decisionBox && typeof decision === "string" && decision.trim()) {
+              decisionBox.textContent = decision.trim();
+            } else if (decisionBox) {
+              decisionBox.textContent = isOk ? "SAFE_TO_DELETE" : "DEPENDENT";
+            }
+          } else {
+            throw new Error(`Unknown operation: ${op}`);
+          }
+          statusEl.textContent = "";
+        } catch (e) {
+          errorEl.textContent = String(e.message || e);
+          statusEl.textContent = "";
+        }
+      }
+
+      runBtn.addEventListener("click", runMutation);
+
+      // Initial load: show schema + items.
+      loadSchema().catch((e) => {
+        errorEl.textContent = String(e.message || e);
+      });
+      loadItems().catch((e) => {
+        errorEl.textContent = String(e.message || e);
+      });
+    </script>
+  </body>
+</html>
+

@@ -1,0 +1,12 @@
+type user {
+	id : String
+	firstname: String
+	lastname: String
+	email: String
+	phone: String
+}
+
+type userdetailsresponse {
+	users : user
+	time: AWSDateTime
+}
