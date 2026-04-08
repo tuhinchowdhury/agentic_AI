@@ -12,10 +12,12 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # ✅ FIX
 
       - name: Detect Removed Fields
         run: |
-          git diff HEAD~1 HEAD schema.txt > diff.txt
+          git diff HEAD~1 HEAD -- schema.txt > diff.txt
 
           echo "==== DIFF ===="
           cat diff.txt
