@@ -22,8 +22,11 @@ jobs:
           echo "==== DIFF ===="
           cat diff.txt
 
-          FIELDS=$(grep "^-" diff.txt | grep -v "^---" | awk '{print $1}' | sed 's/-//g' | sed 's/://g')
+          FIELDS=$(grep "^-.*:" diff.txt \
+            | sed 's/^[[:space:]]*-//' \
+            | awk -F: '{print $1}')
 
+          echo "Detected fields: $FIELDS"
           echo "FIELDS=$FIELDS" >> $GITHUB_ENV
 
       - name: Build Docker Image
