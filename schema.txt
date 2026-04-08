@@ -8,4 +8,5 @@ type user {
 
 type userdetailsresponse {
 	users : user
+	time: AWSDateTime
 }
