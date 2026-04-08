@@ -5,9 +5,6 @@ on:
     branches:
       - develop
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # ✅ important
-
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -16,11 +13,35 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      - name: Detect Removed Fields
+        run: |
+          git diff HEAD~1 HEAD schema.txt > diff.txt
+
+          echo "==== DIFF ===="
+          cat diff.txt
+
+          FIELDS=$(grep "^-" diff.txt | grep -v "^---" | awk '{print $1}' | sed 's/-//g' | sed 's/://g')
+
+          echo "FIELDS=$FIELDS" >> $GITHUB_ENV
+
       - name: Build Docker Image
-        run: docker build -t schema-analyzer .
+        run: docker build -t analyzer .
 
       - name: Run Analyzer
         run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/app \
-            schema-analyzer
+          if [ -z "$FIELDS" ]; then
+            echo "No fields removed"
+            exit 0
+          fi
+
+          for FIELD in $FIELDS
+          do
+            echo "Running for field: $FIELD"
+
+            docker run --rm \
+              -v ${{ github.workspace }}:/app \
+              analyzer \
+              python delete_dependency_check.py \
+              --schema /app/schema.txt \
+              --field $FIELD
+          done
