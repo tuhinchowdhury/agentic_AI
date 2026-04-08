@@ -13,8 +13,15 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # ✅ FIX
+          fetch-depth: 2   # ✅ needed for HEAD~1
 
+      # 🔹 Step 1: Get OLD + NEW schema
+      - name: Prepare Schema Files
+        run: |
+          git show HEAD~1:schema.txt > old_schema.txt
+          cp schema.txt new_schema.txt
+
+      # 🔹 Step 2: Detect removed fields
       - name: Detect Removed Fields
         run: |
           git diff HEAD~1 HEAD -- schema.txt > diff.txt
@@ -23,15 +30,18 @@ jobs:
           cat diff.txt
 
           FIELDS=$(grep "^-.*:" diff.txt \
+            | grep -v "^---" \
             | sed 's/^[[:space:]]*-//' \
             | awk -F: '{print $1}')
 
           echo "Detected fields: $FIELDS"
           echo "FIELDS=$FIELDS" >> $GITHUB_ENV
 
+      # 🔹 Step 3: Build Docker
       - name: Build Docker Image
         run: docker build -t analyzer .
 
+      # 🔹 Step 4: Run Analyzer
       - name: Run Analyzer
         run: |
           if [ -z "$FIELDS" ]; then
@@ -47,6 +57,6 @@ jobs:
               -v ${{ github.workspace }}:/app \
               analyzer \
               python delete_dependency_check.py \
-              --schema /app/schema.txt \
+              --schema /app/old_schema.txt \
               --field $FIELD
           done
