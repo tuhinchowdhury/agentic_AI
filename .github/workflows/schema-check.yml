@@ -5,13 +5,16 @@ on:
     branches:
       - develop
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # ✅ important
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4   # ✅ updated
+        uses: actions/checkout@v4
 
       - name: Build Docker Image
         run: docker build -t schema-analyzer .
